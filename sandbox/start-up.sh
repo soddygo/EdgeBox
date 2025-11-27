@@ -8,8 +8,31 @@ function start_display_and_desktop() {
 	rm -rf /tmp/.X11-unix/X0
 	pkill -f "Xvfb :0" || true
 	pkill -f "xfce4-session" || true
+	pkill -f "dbus-daemon" || true
 
-	# 以user用户启动Xvfb，确保与VNC进程权限一致
+	# 创建用户运行时目录并设置权限
+	USER_ID=$(id -u user)
+	mkdir -p /run/user/${USER_ID}
+	chmod 700 /run/user/${USER_ID}
+	chown user:user /run/user/${USER_ID}
+
+	# 启动 D-Bus 会话 (以 user 用户启动)
+	echo "Starting D-Bus session as user..."
+	su - user -c "eval \$(dbus-launch --sh-syntax); export DBUS_SESSION_BUS_ADDRESS; echo \"D-Bus session: \$DBUS_SESSION_BUS_ADDRESS\"" &
+	sleep 2
+
+	# 启动 D-Bus 系统总线
+	echo "Starting D-Bus system bus..."
+	mkdir -p /var/run/dbus
+	dbus-daemon --system --fork
+	sleep 1
+
+	# 启动 PolicyKit 守护进程（配置为不需要认证）
+	echo "Starting PolicyKit daemon..."
+	/usr/lib/policykit-1/polkitd --no-debug >/var/log/polkitd.log 2>&1 &
+	sleep 2
+
+	# 以user用户启动Xvfb
 	su - user -c "Xvfb :0 -ac -screen 0 1280x800x16 -retro -dpi 96 -nolisten tcp -nolisten unix >/dev/null 2>&1" &
 
 	# 等待Xvfb启动
@@ -23,11 +46,25 @@ function start_display_and_desktop() {
 		fi
 	done
 
-	# 以user用户启动XFCE4会话管理器
+	# 以user用户启动XFCE4会话和所有必要的守护进程
 	su - user -c "
 		export DISPLAY=:0
 		export XDG_CURRENT_DESKTOP=XFCE
 		export XDG_SESSION_DESKTOP=xfce
+		export XDG_RUNTIME_DIR=/run/user/${USER_ID}
+		export GNOME_KEYRING_CONTROL=/run/user/${USER_ID}/keyring
+		export GTK_MODULES=gnome-keyring-pkcs11
+
+		# 启动 gnome-keyring-daemon
+		gnome-keyring-daemon --start --components=secrets,ssh,pkcs11 >/dev/null 2>&1 &
+
+		# 启动 PolicyKit 认证代理
+		/usr/lib/policykit-1-gnome/polkit-gnome-authentication-agent-1 >/var/log/polkit-agent.log 2>&1 &
+
+		# 等待守护进程启动
+		sleep 2
+
+		# 启动 XFCE4 会话
 		xfce4-session >/dev/null 2>&1
 	" &
 

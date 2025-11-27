@@ -1,9 +1,9 @@
-import Docker from 'dockerode';
-import { SandboxConfig } from '../types/sandbox';
-import { DockerContainer } from '../types/docker';
-import { DEFAULT_CONTAINER_PORTS } from '../constants/ports';
-import { getDockerImagePath } from '../utils/paths';
-import { HostConfig } from 'dockerode';
+import Docker from "dockerode";
+import { SandboxConfig } from "../types/sandbox";
+import { DockerContainer } from "../types/docker";
+import { DEFAULT_CONTAINER_PORTS } from "../constants/ports";
+import { getDockerImagePath } from "../utils/paths";
+import { HostConfig } from "dockerode";
 
 export class DockerManager {
   private docker: Docker;
@@ -18,7 +18,10 @@ export class DockerManager {
     return ++this.portCounter;
   }
 
-  private async waitForContainerReady(port: number, timeoutMs: number = 30000): Promise<boolean> {
+  private async waitForContainerReady(
+    port: number,
+    timeoutMs: number = 30000,
+  ): Promise<boolean> {
     const startTime = Date.now();
     const checkInterval = 1000; // 每秒检查一次
 
@@ -33,7 +36,7 @@ export class DockerManager {
       }
 
       // 等待一段时间再重试
-      await new Promise(resolve => setTimeout(resolve, checkInterval));
+      await new Promise((resolve) => setTimeout(resolve, checkInterval));
     }
 
     return false;
@@ -42,24 +45,24 @@ export class DockerManager {
   private async checkPortConnectivity(port: number): Promise<boolean> {
     try {
       const response = await fetch(`http://localhost:${port}/execute`, {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
-          'accept': '*/*',
-          'accept-language': '*',
-          'sec-fetch-mode': 'cors',
-          'user-agent': 'node',
-          'accept-encoding': 'gzip, deflate',
-          'connection': 'keep-alive'
+          "Content-Type": "application/json",
+          accept: "*/*",
+          "accept-language": "*",
+          "sec-fetch-mode": "cors",
+          "user-agent": "node",
+          "accept-encoding": "gzip, deflate",
+          connection: "keep-alive",
         },
         body: JSON.stringify({
           code: "print('hello world')",
           language: "python",
           env_vars: {
-            "x-session-id": "default_session"
-          }
+            "x-session-id": "default_session",
+          },
         }),
-        signal: AbortSignal.timeout(3000)
+        signal: AbortSignal.timeout(3000),
       });
 
       return response.ok;
@@ -73,7 +76,7 @@ export class DockerManager {
       await this.docker.ping();
       return true;
     } catch (error) {
-      console.error('Docker ping failed:', error);
+      console.error("Docker ping failed:", error);
       return false;
     }
   }
@@ -87,7 +90,9 @@ export class DockerManager {
       for (const containerPort of DEFAULT_CONTAINER_PORTS) {
         const hostPort = this.getNextPort();
         ports[containerPort] = hostPort;
-        portBindings[`${containerPort}/tcp`] = [{ HostPort: hostPort.toString() }];
+        portBindings[`${containerPort}/tcp`] = [
+          { HostPort: hostPort.toString() },
+        ];
       }
 
       const domain = `http://localhost:${ports[49999]}`; // Main port
@@ -95,7 +100,7 @@ export class DockerManager {
       // Build HostConfig with resource limits
       const hostConfig: HostConfig = {
         PortBindings: portBindings,
-        AutoRemove: true
+        AutoRemove: true,
       };
 
       // Apply resource limits if provided
@@ -112,7 +117,9 @@ export class DockerManager {
         hostConfig.CpuQuota = cpuQuota;
         hostConfig.CpuPeriod = cpuPeriod;
 
-        console.log(`Container ${config.id} resource limits: CPU=${config.resources.cpuCores} cores, Memory=${config.resources.memoryGB}GB`);
+        console.log(
+          `Container ${config.id} resource limits: CPU=${config.resources.cpuCores} cores, Memory=${config.resources.memoryGB}GB`,
+        );
       }
 
       // Create and start container
@@ -121,8 +128,8 @@ export class DockerManager {
         name: config.id,
         HostConfig: hostConfig,
         ExposedPorts: Object.fromEntries(
-          DEFAULT_CONTAINER_PORTS.map(port => [`${port}/tcp`, {}])
-        )
+          DEFAULT_CONTAINER_PORTS.map((port) => [`${port}/tcp`, {}]),
+        ),
       });
 
       await dockerContainer.start();
@@ -130,9 +137,9 @@ export class DockerManager {
       const container: DockerContainer = {
         id: config.id,
         name: config.id,
-        status: 'starting',
+        status: "starting",
         ports,
-        domain
+        domain,
       };
 
       this.containers.set(config.id, container);
@@ -141,18 +148,21 @@ export class DockerManager {
       const isReady = await this.waitForContainerReady(ports[49999], 30000);
 
       if (isReady) {
-        container.status = 'running';
+        container.status = "running";
         console.log(`Container ${config.id} started successfully and is ready`);
       } else {
-        container.status = 'error';
-        throw new Error(`Container ${config.id} started but port ${ports[49983]} is not responding`);
+        container.status = "error";
+        throw new Error(
+          `Container ${config.id} started but port ${ports[49983]} is not responding`,
+        );
       }
 
       return container;
-
     } catch (error) {
       console.error(`Failed to start container ${config.id}:`, error);
-      throw new Error(`Failed to start container: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw new Error(
+        `Failed to start container: ${error instanceof Error ? error.message : "Unknown error"}`,
+      );
     }
   }
 
@@ -164,7 +174,7 @@ export class DockerManager {
       // Update our internal state
       const container = this.containers.get(containerId);
       if (container) {
-        container.status = 'stopped';
+        container.status = "stopped";
         this.containers.delete(containerId);
       }
 
@@ -190,16 +200,19 @@ export class DockerManager {
 
       // Update status for our tracked containers
       for (const [id, container] of this.containers) {
-        const dockerContainer = dockerContainers.find(dc => dc.Names.includes(`/${id}`));
+        const dockerContainer = dockerContainers.find((dc) =>
+          dc.Names.includes(`/${id}`),
+        );
         if (dockerContainer) {
-          container.status = dockerContainer.State === 'running' ? 'running' : 'stopped';
+          container.status =
+            dockerContainer.State === "running" ? "running" : "stopped";
         } else {
           // Container not found in Docker, mark as stopped
-          container.status = 'stopped';
+          container.status = "stopped";
         }
       }
     } catch (error) {
-      console.error('Failed to refresh containers:', error);
+      console.error("Failed to refresh containers:", error);
     }
   }
 
@@ -209,9 +222,9 @@ export class DockerManager {
       const runningContainers = await this.docker.listContainers();
 
       // Filter only containers created by this project (starting with "container_")
-      const projectContainers = runningContainers.filter(container => {
-        const containerName = container.Names[0].replace('/', '');
-        return containerName.startsWith('container_');
+      const projectContainers = runningContainers.filter((container) => {
+        const containerName = container.Names[0].replace("/", "");
+        return containerName.startsWith("container_");
       });
 
       console.log(`Cleaning up ${projectContainers.length} containers...`);
@@ -219,19 +232,22 @@ export class DockerManager {
       // Stop project containers
       for (const container of projectContainers) {
         try {
-          const containerName = container.Names[0].replace('/', '');
+          const containerName = container.Names[0].replace("/", "");
           const dockerContainer = this.docker.getContainer(containerName);
           await dockerContainer.stop();
           console.log(`Stopped container: ${containerName}`);
         } catch (error) {
-          console.error(`Failed to stop container ${container.Names[0]}:`, error);
+          console.error(
+            `Failed to stop container ${container.Names[0]}:`,
+            error,
+          );
         }
       }
 
       // Also clean up our internal tracking
       this.containers.clear();
     } catch (error) {
-      console.error('Failed to cleanup containers:', error);
+      console.error("Failed to cleanup containers:", error);
     }
   }
 
@@ -239,14 +255,19 @@ export class DockerManager {
   async listRunningContainers(): Promise<string[]> {
     try {
       const containers = await this.docker.listContainers();
-      return containers.map(container => container.Names[0].replace('/', ''));
+      return containers.map((container) => container.Names[0].replace("/", ""));
     } catch (error) {
-      console.error('Failed to list containers:', error);
-      throw new Error(`Failed to list containers: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      console.error("Failed to list containers:", error);
+      throw new Error(
+        `Failed to list containers: ${error instanceof Error ? error.message : "Unknown error"}`,
+      );
     }
   }
 
-  async removeContainer(containerId: string, force: boolean = false): Promise<boolean> {
+  async removeContainer(
+    containerId: string,
+    force: boolean = false,
+  ): Promise<boolean> {
     try {
       const dockerContainer = this.docker.getContainer(containerId);
       await dockerContainer.remove({ force });
@@ -266,21 +287,27 @@ export class DockerManager {
             return;
           }
 
-          this.docker.modem.followProgress(stream, (err: any) => {
-            if (err) {
-              reject(err);
-            } else {
-              resolve();
-            }
-          }, (event: any) => {
-            console.log(`Docker pull ${image}:`, event.status);
-          });
+          this.docker.modem.followProgress(
+            stream,
+            (err: any) => {
+              if (err) {
+                reject(err);
+              } else {
+                resolve();
+              }
+            },
+            (event: any) => {
+              console.log(`Docker pull ${image}:`, event.status);
+            },
+          );
         });
       });
       return true;
     } catch (error) {
       console.error(`Failed to pull image ${image}:`, error);
-      throw new Error(`Failed to pull image ${image}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw new Error(
+        `Failed to pull image ${image}: ${error instanceof Error ? error.message : "Unknown error"}`,
+      );
     }
   }
 
@@ -297,7 +324,7 @@ export class DockerManager {
   // Load Docker image from tar.gz file
   async loadImageFromFile(imagePath: string): Promise<boolean> {
     try {
-      const fs = await import('fs');
+      const fs = await import("fs");
       const stream = fs.createReadStream(imagePath);
       await this.docker.loadImage(stream);
       console.log(`Successfully loaded image from ${imagePath}`);
@@ -311,10 +338,10 @@ export class DockerManager {
   // Load the bundled e2b sandbox image
   async loadBundledSandboxImage(): Promise<boolean> {
     try {
-      const imagePath = getDockerImagePath('e2b-sandbox-latest.tar.gz');
+      const imagePath = getDockerImagePath("e2b-sandbox-latest.tar.gz");
       return await this.loadImageFromFile(imagePath);
     } catch (error) {
-      console.error('Failed to load bundled sandbox image:', error);
+      console.error("Failed to load bundled sandbox image:", error);
       return false;
     }
   }

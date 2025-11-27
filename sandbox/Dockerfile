@@ -17,27 +17,27 @@ ENV \
 RUN apt-get update && \
     # Install all packages in one layer to reduce image size
     apt-get install -y \
-        # X window server:
-        xserver-xorg xorg x11-xserver-utils xvfb x11-utils xauth \
-        # XFCE desktop environment:
-        xfce4 xfce4-goodies \
-        # Basic system utilities:
-        util-linux sudo curl git \
-        # Python pip:
-        python3-pip \
-        # Desktop SDK tools:
-        xdotool scrot ffmpeg \
-        # VNC and streaming:
-        x11vnc net-tools netcat-openbsd \
-        # Standard applications:
-        x11-apps xpdf gedit xpaint tint2 galculator pcmanfm \
-        # Dependencies for later installations:
-        apt-transport-https ca-certificates gnupg \
-        socat supervisor \
-        xclip \
-        wget software-properties-common \
-        # Suna dependencies:
-        poppler-utils wkhtmltopdf antiword unrtf catdoc gawk file jq csvkit xmlstarlet zip unzip tmux vim tree rsync && \
+    # X window server:
+    xserver-xorg xorg x11-xserver-utils xvfb x11-utils xauth \
+    # XFCE desktop environment:
+    xfce4 xfce4-goodies \
+    # Basic system utilities:
+    util-linux sudo curl git \
+    # Python pip:
+    python3-pip \
+    # Desktop SDK tools:
+    xdotool scrot ffmpeg \
+    # VNC and streaming:
+    x11vnc net-tools netcat-openbsd \
+    # Standard applications:
+    x11-apps xpdf gedit xpaint tint2 galculator pcmanfm \
+    # Dependencies for later installations:
+    apt-transport-https ca-certificates gnupg \
+    socat supervisor \
+    xclip \
+    wget software-properties-common \
+    # Suna dependencies:
+    poppler-utils wkhtmltopdf antiword unrtf catdoc gawk file jq csvkit xmlstarlet zip unzip tmux vim tree rsync && \
     # Configure X11 wrapper to allow any user:
     sed -i 's/allowed_users=console/allowed_users=anybody/' /etc/X11/Xwrapper.config && \
     # Set the default terminal
@@ -56,14 +56,14 @@ RUN apt-get update && \
 # Install LibreOffice from official website
 ARG TARGETARCH
 RUN case "$TARGETARCH" in \
-        "amd64") LO_ARCH="x86_64" ;; \
-        "arm64") LO_ARCH="aarch64" ;; \
-        *) echo "Unsupported architecture: $TARGETARCH" && exit 1 ;; \
+    "amd64") LO_ARCH="x86_64" ;; \
+    "arm64") LO_ARCH="aarch64" ;; \
+    *) echo "Unsupported architecture: $TARGETARCH" && exit 1 ;; \
     esac && \
     case "$TARGETARCH" in \
-        "amd64") LO_ARCH2="x86-64" ;; \
-        "arm64") LO_ARCH2="aarch64" ;; \
-        *) echo "Unsupported architecture: $TARGETARCH" && exit 1 ;; \
+    "amd64") LO_ARCH2="x86-64" ;; \
+    "arm64") LO_ARCH2="aarch64" ;; \
+    *) echo "Unsupported architecture: $TARGETARCH" && exit 1 ;; \
     esac && \
     wget -O /tmp/libreoffice.tar.gz "https://mirrors.ustc.edu.cn/tdf/libreoffice/stable/25.8.1/deb/${LO_ARCH}/LibreOffice_25.8.1_Linux_${LO_ARCH2}_deb.tar.gz" && \
     cd /tmp && \
@@ -97,7 +97,7 @@ RUN mkdir -p /etc/chromium/policies/managed/ && \
 
 # Create user and configure Chrome (merged for smaller image size)
 RUN apt-get update && \
-    apt-get install -y gnome-keyring && \
+    apt-get install -y gnome-keyring policykit-1-gnome policykit-1 && \
     # Create default user
     useradd -ms /bin/bash user && \
     usermod -aG sudo user && \
@@ -109,12 +109,28 @@ RUN apt-get update && \
     # Configure GNOME keyring and autostart
     mkdir -p /home/user/.local/share/keyrings && \
     touch /home/user/.local/share/keyrings/login.keyring && \
+    # Configure PolicyKit to auto-allow Chromium operations
+    mkdir -p /etc/polkit-1/localauthority/50-local.d && \
+    # Create comprehensive policy for user
+    printf '[Allow all for user]\nIdentity=unix-user:user\nAction=*\nResultAny=yes\nResultInactive=yes\nResultActive=yes\n\n[Allow all for user - specific patterns]\nIdentity=unix-user:user\nAction=org.freedesktop.policykit.*\nResultAny=yes\nResultInactive=yes\nResultActive=yes\n\n[Allow Chromium specific]\nIdentity=unix-user:user\nAction=org.chromium.*\nResultAny=yes\nResultInactive=yes\nResultActive=yes' > /etc/polkit-1/localauthority/50-local.d/comprehensive-allow.pkla && \
     mkdir -p /home/user/.config/autostart && \
+    # Create PolicyKit authentication agent autostart
+    printf "[Desktop Entry]\nType=Application\nName=PolicyKit Auth\nExec=/usr/lib/policykit-1-gnome/polkit-gnome-authentication-agent-1\nHidden=false\nNoDisplay=false\nX-GNOME-Autostart-enabled=true\nStartupNotify=false" > /home/user/.config/autostart/polkit-gnome-auth.desktop && \
+    # Create D-Bus session autostart
+    printf "[Desktop Entry]\nType=Application\nName=D-Bus Session\nExec=/usr/bin/dbus-launch --sh-syntax\nHidden=false\nNoDisplay=false\nX-GNOME-Autostart-enabled=true" > /home/user/.config/autostart/dbus-session.desktop && \
+    # Create PolicyKit daemon autostart
+    printf "[Desktop Entry]\nType=Application\nName=PolicyKit Daemon\nExec=/usr/lib/policykit-1/polkitd --no-debug\nHidden=false\nNoDisplay=false\nX-GNOME-Autostart-enabled=true" > /home/user/.config/autostart/polkitd.desktop && \
     # Create Chromium data directory and set permissions
     mkdir -p /home/user/chromium-data && \
-    chown -R user:user /home/user && \
+    # 创建用户运行时目录
+    mkdir -p /run/user/$(id -u user) && \
+    chown -R user:user /home/user /run/user/$(id -u user) && \
     chmod -R 777 /home/user/chromium-data && \
     chmod 777 /home/user && \
+    chmod 700 /run/user/$(id -u user) && \
+    # Create secure wrapper script in /usr/bin (更安全的路径)
+    printf '#!/bin/bash\nUSER_ID=$(id -u user)\nexport DISPLAY=:0\nmkdir -p /run/user/${USER_ID}\nchown user:user /run/user/${USER_ID}\nchmod 700 /run/user/${USER_ID}\nexport XDG_RUNTIME_DIR=/run/user/${USER_ID}\nexport GNOME_KEYRING_CONTROL=/run/user/${USER_ID}/keyring\nexport DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/${USER_ID}/bus\nexport XDG_SESSION_TYPE=x11\nexport GTK_MODULES=gnome-keyring-pkcs11:libgnome-keyring\nexec /usr/bin/chromium --user-data-dir=/home/user/chromium-data --no-sandbox --disable-gpu --disable-dev-shm-usage --remote-debugging-port=9222 --remote-debugging-address=0.0.0.0 --no-first-run --no-default-browser-check --disable-extensions --disable-default-apps --disable-component-update --password-store=basic --use-mock-keychain --autoplay-policy=no-user-gesture-required --no-zygote --disable-session-crashed-bubble --disable-features=VizDisplayCompositor --disable-policy-service-test-mode --disable-gpu-sandbox --disable-setuid-sandbox --disable-background-networking --disable-background-timer-throttling --disable-renderer-backgrounding --disable-backgrounding-occluded-windows --disable-features=TranslateUI --disable-ipc-flooding-protection "$@"\n' > /usr/bin/chromium-browser-launcher && \
+    chmod 755 /usr/bin/chromium-browser-launcher && \
     # Add Chromium aliases
     echo 'alias chromium="/usr/local/bin/chromium"' >> /home/user/.bashrc && \
     echo 'alias chrome="/usr/local/bin/chromium"' >> /home/user/.bashrc && \
@@ -128,7 +144,7 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
 # Create Chromium launcher with CDP flags
-RUN printf '#!/bin/bash\necho "Starting Chromium with remote debugging on 0.0.0.0:9222..."\n/usr/bin/chromium --no-sandbox --disable-gpu --disable-dev-shm-usage --remote-debugging-port=9222 --remote-debugging-address=0.0.0.0 --no-first-run --no-default-browser-check --disable-extensions --disable-default-apps --disable-component-update --password-store=basic --use-mock-keychain --autoplay-policy=no-user-gesture-required --user-data-dir=/home/user/chromium-data --no-zygote --disable-session-crashed-bubble "$@"\necho "Chromium exited with code $?"\n' > /usr/local/bin/chromium && \
+RUN printf '#!/bin/bash\nUSER_ID=$(id -u user)\nexport DISPLAY=:0\n\n# 创建并设置运行时目录\nmkdir -p /run/user/${USER_ID}\nchown user:user /run/user/${USER_ID}\nchmod 700 /run/user/${USER_ID}\n\n# 设置关键环境变量\nexport XDG_RUNTIME_DIR=/run/user/${USER_ID}\nexport GNOME_KEYRING_CONTROL=/run/user/${USER_ID}/keyring\nexport DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/${USER_ID}/bus\nexport XDG_SESSION_TYPE=x11\nexport GTK_MODULES=gnome-keyring-pkcs11:libgnome-keyring\nexport GIO_USE_VFS=local\nexport GIO_USE_GNOME_VFS_MODULE=shared\n\necho "Starting Chromium as user..."\n\n# 以 user 用户身份运行 Chromium\nsu - user -c "export DISPLAY=:0; export XDG_RUNTIME_DIR=/run/user/${USER_ID}; export GNOME_KEYRING_CONTROL=/run/user/${USER_ID}/keyring; export DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/${USER_ID}/bus; export XDG_SESSION_TYPE=x11; export GTK_MODULES=gnome-keyring-pkcs11:libgnome-keyring; /usr/bin/chromium --user-data-dir=/home/user/chromium-data --no-sandbox --disable-gpu --disable-dev-shm-usage --remote-debugging-port=9222 --remote-debugging-address=0.0.0.0 --no-first-run --no-default-browser-check --disable-extensions --disable-default-apps --disable-component-update --password-store=basic --use-mock-keychain --autoplay-policy=no-user-gesture-required --no-zygote --disable-session-crashed-bubble --disable-features=VizDisplayCompositor --disable-policy-service-test-mode --disable-gpu-sandbox --disable-setuid-sandbox --ignore-gpu-blocklist --disable-gpu-driver-bug-workarounds --disable-background-networking --disable-background-timer-throttling --disable-renderer-backgrounding --disable-backgrounding-occluded-windows --disable-features=TranslateUI --disable-ipc-flooding-protection --disable-features=OptimizationHints --disable-client-side-phishing-detection --disable-popup-blocking --disable-prompt-on-repost --disable-sync --disable-translate --disable-field-trial-config --disable-blink-features=AutomationControlled --no-experiments --metrics-recording-only --no-report-upload --force-device-scale-factor=1 --disable-touch-editing --disable-new-menu-bar --disable-extensions-http-throttling --disable-ipc-flooding-protection --disable-plugins-discovery --disable-webgl --enable-logging --log-level=0"\n' > /usr/local/bin/chromium && \
     chmod +x /usr/local/bin/chromium
 
 # Create a socat service with supervisor to ensure port forwarding is always running
@@ -150,9 +166,9 @@ RUN echo '#!/bin/bash\n# 启动supervisord服务\nsudo /usr/bin/supervisord -c /
 # Install VS Code (optimized single layer)
 ARG TARGETARCH
 RUN case "$TARGETARCH" in \
-        "amd64") VS_ARCH="x64" ;; \
-        "arm64") VS_ARCH="arm64" ;; \
-        *) echo "Unsupported architecture: $TARGETARCH" && exit 1 ;; \
+    "amd64") VS_ARCH="x64" ;; \
+    "arm64") VS_ARCH="arm64" ;; \
+    *) echo "Unsupported architecture: $TARGETARCH" && exit 1 ;; \
     esac && \
     wget -O /tmp/vscode.deb "https://code.visualstudio.com/sha/download?build=stable&os=linux-deb-${VS_ARCH}" && \
     dpkg -i /tmp/vscode.deb || true && \
@@ -176,25 +192,30 @@ RUN mkdir -p /home/user/.config/xfce4/xfconf/xfce-perchannel-xml/ && \
     echo '<?xml version="1.0" encoding="UTF-8"?>\n<channel name="xfce4-power-manager" version="1.0">\n  <property name="xfce4-power-manager" type="empty">\n    <property name="blank-on-ac" type="int" value="0"/>\n    <property name="blank-on-battery" type="int" value="0"/>\n    <property name="dpms-enabled" type="bool" value="false"/>\n    <property name="dpms-on-ac-sleep" type="uint" value="0"/>\n    <property name="dpms-on-ac-off" type="uint" value="0"/>\n    <property name="dpms-on-battery-sleep" type="uint" value="0"/>\n    <property name="dpms-on-battery-off" type="uint" value="0"/>\n  </property>\n</channel>' > /home/user/.config/xfce4/xfconf/xfce-perchannel-xml/xfce4-power-manager.xml && \
     # Configure XFCE panel with Chromium launcher in taskbar
     echo '<?xml version="1.0" encoding="UTF-8"?>\n<channel name="xfce4-panel" version="1.0">\n  <property name="configver" type="int" value="2"/>\n  <property name="panels" type="array">\n    <value type="int" value="1"/>\n    <property name="panel-1" type="empty">\n      <property name="position" type="string" value="p=6;x=0;y=0"/>\n      <property name="length" type="uint" value="100"/>\n      <property name="position-locked" type="bool" value="true"/>\n      <property name="size" type="uint" value="30"/>\n      <property name="plugin-ids" type="array">\n        <value type="int" value="1"/>\n        <value type="int" value="2"/>\n        <value type="int" value="3"/>\n        <value type="int" value="4"/>\n        <value type="int" value="5"/>\n        <value type="int" value="6"/>\n        <value type="int" value="7"/>\n      </property>\n    </property>\n  </property>\n  <property name="plugins" type="empty">\n    <property name="plugin-1" type="string" value="applicationsmenu"/>\n    <property name="plugin-2" type="string" value="separator"/>\n    <property name="plugin-3" type="string" value="tasklist"/>\n    <property name="plugin-4" type="string" value="launcher">\n      <property name="items" type="array">\n        <value type="string" value="chromium.desktop"/>\n      </property>\n    </property>\n    <property name="plugin-5" type="string" value="separator"/>\n    <property name="plugin-6" type="string" value="systray"/>\n    <property name="plugin-7" type="string" value="clock"/>\n  </property>\n</channel>' > /home/user/.config/xfce4/xfconf/xfce-perchannel-xml/xfce4-panel.xml && \
-    # Override system Chromium desktop entry to use custom launcher
+    # Create system-wide Chromium desktop entry in secure location
+    mkdir -p /usr/share/applications && \
+    printf "[Desktop Entry]\nVersion=1.0\nType=Application\nName=Chromium\nComment=Web Browser with Remote Debugging\nExec=/usr/bin/chromium-browser-launcher\nIcon=chromium\nTerminal=false\nCategories=Network;WebBrowser;\nMimeType=text/html;text/xml;application/xhtml+xml;application/xml;application/rss+xml;application/rdf+xml;image/gif;image/jpeg;image/png;x-scheme-handler/http;x-scheme-handler/https;x-scheme-handler/ftp;x-scheme-handler/chrome;video/webm;application/x-xpinstall;\nActions=NewWindow;NewPrivateWindow;" > /usr/share/applications/chromium-browser.desktop && \
+    # Also create symbolic link for chromium.desktop
+    ln -sf /usr/share/applications/chromium-browser.desktop /usr/share/applications/chromium.desktop && \
+    chmod 644 /usr/share/applications/chromium-browser.desktop /usr/share/applications/chromium.desktop && \
+    # Override user-level as well
     mkdir -p /home/user/.local/share/applications && \
-    echo "[Desktop Entry]\nVersion=1.0\nType=Application\nName=Chromium\nComment=Web Browser with Remote Debugging\nExec=/usr/local/bin/chromium\nIcon=chromium\nTerminal=false\nCategories=Network;WebBrowser;\nMimeType=text/html;text/xml;application/xhtml+xml;application/xml;application/rss+xml;application/rdf+xml;image/gif;image/jpeg;image/png;x-scheme-handler/http;x-scheme-handler/https;x-scheme-handler/ftp;x-scheme-handler/chrome;video/webm;application/x-xpinstall;\nActions=NewWindow;NewPrivateWindow;" > /home/user/.local/share/applications/chromium.desktop && \
-    chmod +x /home/user/.local/share/applications/chromium.desktop && \
+    printf "[Desktop Entry]\nVersion=1.0\nType=Application\nName=Chromium\nComment=Web Browser with Remote Debugging\nExec=/usr/bin/chromium-browser-launcher\nIcon=chromium\nTerminal=false\nCategories=Network;WebBrowser;" > /home/user/.local/share/applications/chromium.desktop && \
+    chmod 644 /home/user/.local/share/applications/chromium.desktop && \
     # Set Chromium as default web browser
     echo "[Default Applications]\ntext/html=chromium.desktop\ntext/xml=chromium.desktop\napplication/xhtml+xml=chromium.desktop\napplication/xml=chromium.desktop\napplication/rss+xml=chromium.desktop\napplication/rdf+xml=chromium.desktop\nimage/gif=chromium.desktop\nimage/jpeg=chromium.desktop\nimage/png=chromium.desktop\nx-scheme-handler/http=chromium.desktop\nx-scheme-handler/https=chromium.desktop\nx-scheme-handler/ftp=chromium.desktop\nx-scheme-handler/chrome=chromium.desktop\nvideo/webm=chromium.desktop\napplication/x-xpinstall=chromium.desktop" > /home/user/.config/mimeapps.list && \
     chown -R user:user /home/user/.config /home/user/.local
 
 # Create desktop icons for terminal, VS Code, and Chrome
-RUN mkdir -p /home/user/Desktop && \
-    # Terminal desktop icon
-    echo "[Desktop Entry]\nVersion=1.0\nType=Application\nName=Terminal\nComment=Terminal Emulator\nExec=xfce4-terminal\nIcon=utilities-terminal\nTerminal=false\nCategories=System;TerminalEmulator;" > /home/user/Desktop/terminal.desktop && \
-    chmod +x /home/user/Desktop/terminal.desktop && \
-    # VS Code desktop icon
-    echo "[Desktop Entry]\nVersion=1.0\nType=Application\nName=Visual Studio Code\nComment=Code Editor\nExec=/usr/bin/code --no-sandbox\nIcon=vscode\nTerminal=false\nCategories=Development;IDE;" > /home/user/Desktop/vscode.desktop && \
-    chmod +x /home/user/Desktop/vscode.desktop && \
-    # Chromium desktop icon
-    echo "[Desktop Entry]\nVersion=1.0\nType=Application\nName=Chromium\nComment=Web Browser with Remote Debugging\nExec=/usr/local/bin/chromium\nIcon=chromium\nTerminal=false\nCategories=Network;WebBrowser;" > /home/user/Desktop/chromium.desktop && \
-    chmod +x /home/user/Desktop/chromium.desktop && \
+RUN mkdir -p /home/user/Desktop /usr/share/applications && \
+    # Create safe desktop files in system directory (not in user's home)
+    printf "[Desktop Entry]\nVersion=1.0\nType=Application\nName=Terminal\nComment=Terminal Emulator\nExec=xfce4-terminal\nIcon=utilities-terminal\nTerminal=false\nCategories=System;TerminalEmulator;" > /usr/share/applications/user-terminal.desktop && \
+    printf "[Desktop Entry]\nVersion=1.0\nType=Application\nName=Visual Studio Code\nComment=Code Editor\nExec=/usr/bin/code --no-sandbox\nIcon=vscode\nTerminal=false\nCategories=Development;IDE;" > /usr/share/applications/user-vscode.desktop && \
+    chmod 644 /usr/share/applications/user-terminal.desktop /usr/share/applications/user-vscode.desktop && \
+    # Create symbolic links from Desktop to system apps (安全软链接)
+    ln -sf /usr/share/applications/user-terminal.desktop /home/user/Desktop/terminal.desktop && \
+    ln -sf /usr/share/applications/user-vscode.desktop /home/user/Desktop/vscode.desktop && \
+    ln -sf /usr/share/applications/chromium-browser.desktop /home/user/Desktop/chromium.desktop && \
     chown -R user:user /home/user/Desktop
 
 # Copy firefox policies
@@ -207,9 +228,9 @@ COPY firefox.cfg /usr/lib/firefox-esr/firefox.cfg
 # 系统依赖和Python 3.12安装 (merged for smaller image size)
 RUN DEBIAN_FRONTEND=noninteractive apt-get update && \
     apt-get install -y --no-install-recommends \
-        build-essential curl git util-linux jq sudo fonts-noto-cjk \
-        systemd ca-certificates chrony r-base software-properties-common \
-        libzmq3-dev libzmq5 pkg-config && \
+    build-essential curl git util-linux jq sudo fonts-noto-cjk \
+    systemd ca-certificates chrony r-base software-properties-common \
+    libzmq3-dev libzmq5 pkg-config && \
     # 使用 Debian 12 默认的 Python 3.11 (更稳定)
     apt-get install -y python3 python3-dev python3-venv python3-pip && \
     ln -sf /usr/bin/python3 /usr/bin/python && \
@@ -241,12 +262,12 @@ RUN apt-get update && \
 
 # 环境变量设置
 ENV PIP_DEFAULT_TIMEOUT=100 \
-  PIP_DISABLE_PIP_VERSION_CHECK=1 \
-  PIP_NO_CACHE_DIR=1 \
-  JUPYTER_CONFIG_PATH="/root/.jupyter" \
-  IPYTHON_CONFIG_PATH="/root/.ipython" \
-  SERVER_PATH="/root/.server" \
-  R_VERSION=4.4.2
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PIP_NO_CACHE_DIR=1 \
+    JUPYTER_CONFIG_PATH="/root/.jupyter" \
+    IPYTHON_CONFIG_PATH="/root/.ipython" \
+    SERVER_PATH="/root/.server" \
+    R_VERSION=4.4.2
 
 ENV R_HOME=/opt/R/${R_VERSION} \
     JAVA_HOME=/opt/java/openjdk
@@ -305,24 +326,24 @@ RUN mkdir -p /etc/systemd/system/multi-user.target.wants
 COPY ./bin/ /tmp/envd-bin/
 # 根据目标架构选择对应的 envd 二进制文件
 RUN if [ "$TARGETARCH" = "arm64" ]; then \
-        cp /tmp/envd-bin/envd-arm64 /usr/bin/envd; \
+    cp /tmp/envd-bin/envd-arm64 /usr/bin/envd; \
     else \
-        cp /tmp/envd-bin/envd /usr/bin/envd; \
+    cp /tmp/envd-bin/envd /usr/bin/envd; \
     fi && \
     chmod +x /usr/bin/envd && \
     rm -rf /tmp/envd-bin
 RUN echo '[Unit]\n\
-Description=Env Daemon Service\n\
-\n\
-[Service]\n\
-Type=simple\n\
-Restart=always\n\
-User=root\n\
-Group=root\n\
-ExecStart=/bin/bash -l -c /usr/bin/envd\n\
-\n\
-[Install]\n\
-WantedBy=multi-user.target' > /etc/systemd/system/envd.service
+    Description=Env Daemon Service\n\
+    \n\
+    [Service]\n\
+    Type=simple\n\
+    Restart=always\n\
+    User=root\n\
+    Group=root\n\
+    ExecStart=/bin/bash -l -c /usr/bin/envd\n\
+    \n\
+    [Install]\n\
+    WantedBy=multi-user.target' > /etc/systemd/system/envd.service
 
 RUN ln -s /etc/systemd/system/envd.service /etc/systemd/system/multi-user.target.wants/envd.service
 
@@ -332,10 +353,10 @@ RUN echo 'makestep 1 -1' > /etc/chrony/chrony.conf
 
 RUN mkdir -p /etc/systemd/system/chrony.service.d
 RUN echo '[Service]\n\
-ExecStart=\n\
-ExecStart=/usr/sbin/chronyd\n\
-User=root\n\
-Group=root' > /etc/systemd/system/chrony.service.d/override.conf
+    ExecStart=\n\
+    ExecStart=/usr/sbin/chronyd\n\
+    User=root\n\
+    Group=root' > /etc/systemd/system/chrony.service.d/override.conf
 
 RUN systemctl enable chrony
 
@@ -352,9 +373,9 @@ RUN rm -f /usr/bin/java && \
 # 配置自动登录
 RUN mkdir -p /etc/systemd/system/serial-getty@ttyS0.service.d
 RUN echo '[Service]\n\
-ExecStart=\n\
-ExecStart=-/sbin/agetty --noissue --autologin root %I 115200,38400,9600 vt102' \
-> /etc/systemd/system/serial-getty@ttyS0.service.d/autologin.conf
+    ExecStart=\n\
+    ExecStart=-/sbin/agetty --noissue --autologin root %I 115200,38400,9600 vt102' \
+    > /etc/systemd/system/serial-getty@ttyS0.service.d/autologin.conf
 
 # 创建虚拟环境并安装服务器依赖 (with cleanup)
 RUN python -m venv $SERVER_PATH/.venv
@@ -378,11 +399,19 @@ COPY startup_scripts/* $IPYTHON_CONFIG_PATH/profile_default/startup
 ENV DISPLAY=:0
 
 RUN apt-get update && apt-get install -y dbus-x11 && \
-    rm -rf /var/lib/apt/lists/*
+    # Ensure PolicyKit and D-Bus are running
+    # Create D-Bus session configuration
+    mkdir -p /etc/dbus-1/session.d && \
+    printf '<!-- Session bus for user -->\n<!DOCTYPE busconfig PUBLIC "-//freedesktop//DTD D-Bus Bus Configuration 1.0//EN" "http://www.freedesktop.org/standards/dbus/1.0/busconfig.dtd">\n<busconfig>\n  <policy user="user">\n    <allow own="*"/>\n    <allow own_prefix="*"/>\n    <allow send_destination="*"/>\n    <allow receive_sender="*"/>\n  </policy>\n</busconfig>' > /etc/dbus-1/session.d/user-session.conf && \
+    # Set proper permissions
+    chown -R root:root /etc/polkit-1 /etc/dbus-1 && \
+    chmod 755 /etc/polkit-1/localauthority/50-local.d /etc/dbus-1/session.d && \
+    chmod 644 /etc/polkit-1/localauthority/50-local.d/*.pkla /etc/dbus-1/session.d/*.conf && \
+    rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
 
 
 
-ENTRYPOINT $JUPYTER_CONFIG_PATH/start-up.sh 
+ENTRYPOINT $JUPYTER_CONFIG_PATH/start-up.sh
 
 #/bin/bash -l -c "/usr/bin/envd"
