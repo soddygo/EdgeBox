@@ -244,7 +244,7 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get update && \
 RUN apt-get update && \
     apt-get install -y curl gnupg ca-certificates && \
     # 添加 NodeSource PPA for Node.js 22.x
-    curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
+    curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && \
     # 安装 Node.js (npm 会一同被安装)
     apt-get install -y nodejs && \
     # 更新证书
@@ -301,8 +301,8 @@ RUN export ZMQ_BUILD_DIR=/usr && \
     # Clean up npm cache
     npm cache clean --force
 
-# Deno Kernel (with cleanup)
-COPY --from=denoland/deno:bin-2.0.4 /deno /usr/bin/deno
+# Deno Kernel (upgraded to latest 2.5.6)
+COPY --from=denoland/deno:bin-2.5.6 /deno /usr/bin/deno
 RUN chmod +x /usr/bin/deno && \
     deno jupyter --unstable --install && \
     # Clean up deno cache
