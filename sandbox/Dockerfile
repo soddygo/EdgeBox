@@ -21,6 +21,8 @@ RUN apt-get update && \
     xserver-xorg xorg x11-xserver-utils xvfb x11-utils xauth \
     # XFCE desktop environment:
     xfce4 xfce4-goodies \
+    # 中文输入法
+    fcitx5 fcitx5-pinyin \
     # Basic system utilities:
     util-linux sudo curl git \
     # Python pip:
@@ -124,6 +126,47 @@ RUN apt-get update && \
     mkdir -p /home/user/chromium-data && \
     # 创建用户运行时目录
     mkdir -p /run/user/$(id -u user) && \
+    # ========== 配置中文输入法 fcitx5 ==========
+    mkdir -p /home/user/.config/fcitx5 && \
+    mkdir -p /home/user/.config/autostart && \
+    mkdir -p /home/user/.config/environment.d && \
+    # 1. 在 .bashrc 中设置环境变量（终端使用）
+    echo 'export GTK_IM_MODULE=fcitx5' >> /home/user/.bashrc && \
+    echo 'export QT_IM_MODULE=fcitx5' >> /home/user/.bashrc && \
+    echo 'export XMODIFIERS=@im=fcitx5' >> /home/user/.bashrc && \
+    echo 'export INPUT_METHOD=fcitx5' >> /home/user/.bashrc && \
+    echo 'export SDL_IM_MODULE=fcitx5' >> /home/user/.bashrc && \
+    echo 'export GLFW_IM_MODULE=ibus' >> /home/user/.bashrc && \
+    # 2. 在 .xprofile 中设置环境变量（X 会话启动时加载，GUI 应用可用）
+    echo 'export GTK_IM_MODULE=fcitx5' > /home/user/.xprofile && \
+    echo 'export QT_IM_MODULE=fcitx5' >> /home/user/.xprofile && \
+    echo 'export XMODIFIERS=@im=fcitx5' >> /home/user/.xprofile && \
+    echo 'export INPUT_METHOD=fcitx5' >> /home/user/.xprofile && \
+    echo 'export SDL_IM_MODULE=fcitx5' >> /home/user/.xprofile && \
+    echo 'export GLFW_IM_MODULE=ibus' >> /home/user/.xprofile && \
+    # 3. 在 systemd 用户环境中设置（现代 Linux 推荐方式）
+    echo 'GTK_IM_MODULE=fcitx5' > /home/user/.config/environment.d/fcitx5.conf && \
+    echo 'QT_IM_MODULE=fcitx5' >> /home/user/.config/environment.d/fcitx5.conf && \
+    echo 'XMODIFIERS=@im=fcitx5' >> /home/user/.config/environment.d/fcitx5.conf && \
+    echo 'INPUT_METHOD=fcitx5' >> /home/user/.config/environment.d/fcitx5.conf && \
+    echo 'SDL_IM_MODULE=fcitx5' >> /home/user/.config/environment.d/fcitx5.conf && \
+    echo 'GLFW_IM_MODULE=ibus' >> /home/user/.config/environment.d/fcitx5.conf && \
+    # 4. 创建自启动配置 - 让 fcitx5 开机启动
+    printf '[Desktop Entry]\nType=Application\nName=Fcitx 5\nComment=Input Method Framework\nExec=fcitx5 -d --replace\nIcon=fcitx5\nStartupNotify=false\nTerminal=false\nCategories=System;Utility;\nX-GNOME-Autostart-enabled=true\nX-KDE-autostart-after=panel\nX-MATE-Autostart-enabled=true' > /home/user/.config/autostart/fcitx5.desktop && \
+    # 6. 配置 fcitx5 全局选项（启用云拼音、设置切换快捷键）
+    mkdir -p /home/user/.config/fcitx5/conf && \
+    printf '[Hotkey]\n# Enumerate when press trigger key repeatedly\nEnumerateWithTriggerKeys=True\n# Temporally switch between first and current Input Method\nAltTriggerKeys=\n# Enumerate Input Method Forward\nEnumerateForwardKeys=\n# Enumerate Input Method Backward\nEnumerateBackwardKeys=\n# Skip first input method while enumerating\nEnumerateSkipFirst=False\n\n[Hotkey/TriggerKeys]\n0=Control+space\n1=Shift+Control+space\n\n[Hotkey/EnumerateGroupForwardKeys]\n0=Super+space\n\n[Hotkey/EnumerateGroupBackwardKeys]\n0=Shift+Super+space\n\n[Hotkey/ActivateKeys]\n0=Hangul_Hanja\n\n[Hotkey/DeactivateKeys]\n0=Hangul_Romaja\n\n[Hotkey/PrevPage]\n0=Up\n\n[Hotkey/NextPage]\n0=Down\n\n[Hotkey/PrevCandidate]\n0=Shift+Tab\n\n[Hotkey/NextCandidate]\n0=Tab\n\n[Hotkey/TogglePreedit]\n0=Control+Alt+P\n\n[Behavior]\n# Active By Default\nActiveByDefault=True\n# Share Input State\nShareInputState=No\n# Preload input method to be used by default\nPreloadInputMethod=True\n# Show Input Method Information when switch input method\nShowInputMethodInformation=True\n# Show Input Method Information when changing focus\nShowInputMethodInformationWhenFocusIn=False\n# Show compact input method information\nCompactInputMethodInformation=True\n# Show first input method information\nShowFirstInputMethodInformation=True\n# Default page size\nDefaultPageSize=5\n# Override Xkb Option\nOverrideXkbOption=False\n# Custom Xkb Option\nCustomXkbOption=\n# Force Enabled Addons\nEnabledAddons=\n# Force Disabled Addons\nDisabledAddons=\n# Preload input method to be used by default\nPreeditEnabledByDefault=True' > /home/user/.config/fcitx5/config && \
+    # 7. 配置拼音输入法选项（启用云拼音）
+    mkdir -p /home/user/.config/fcitx5/conf && \
+    printf '[Addon]\n# Enabled\nEnabled=True\n\n[Behavior]\n# Show preedit within application\nPreeditInApplication=False\n\n[PinyinEngine]\n# Shuangpin Profile\nShuangpinProfile=Ziranma\n# Show current shuangpin mode\nShowActualPinyinInHint=False\n# Enable Prediction\nPredictionEnabled=True\n# Prediction Size\nPredictionSize=10\n# Enable Cloud Pinyin\nCloudPinyinEnabled=True\n# Cloud Pinyin Index\nCloudPinyinIndex=2' > /home/user/.config/fcitx5/conf/pinyin.conf && \
+    # 8. 创建输入法启用列表（关键：确保拼音输入法被启用）
+    mkdir -p /home/user/.local/share/fcitx5/inputmethod && \
+    printf 'keyboard-us:True\npinyin:True' > /home/user/.local/share/fcitx5/inputmethod/default.conf && \
+    # 9. 启用拼音输入法 addon
+    mkdir -p /home/user/.config/fcitx5/conf && \
+    printf '[Addons]\n0=fcitx5-pinyin\n1=fcitx5-chinese-addons' > /home/user/.config/fcitx5/addon.conf && \
+    # 10. 创建简化的 profile（使用更兼容的格式）
+    printf '[Groups/0]\nName=Default\nDefault Layout=us\nDefaultIM=pinyin\n\n[Groups/0/Items/0]\nName=keyboard-us\nLayout=\n\n[Groups/0/Items/1]\nName=pinyin\nLayout=\n\n[GroupOrder]\n0=Default\n\n[Behavior]\nActiveByDefault=True\nShareInputState=No' > /home/user/.config/fcitx5/profile && \
     chown -R user:user /home/user /run/user/$(id -u user) && \
     chmod -R 777 /home/user/chromium-data && \
     chmod 777 /home/user && \
@@ -390,6 +433,14 @@ RUN mkdir -p $IPYTHON_CONFIG_PATH/profile_default/startup
 COPY startup_scripts/* $IPYTHON_CONFIG_PATH/profile_default/startup
 
 ENV DISPLAY=:0
+
+# 设置全局输入法环境变量（容器级别）
+ENV GTK_IM_MODULE=fcitx5 \
+    QT_IM_MODULE=fcitx5 \
+    XMODIFIERS=@im=fcitx5 \
+    INPUT_METHOD=fcitx5 \
+    SDL_IM_MODULE=fcitx5 \
+    GLFW_IM_MODULE=ibus
 
 RUN apt-get update && apt-get install -y dbus-x11 && \
     # Ensure PolicyKit and D-Bus are running

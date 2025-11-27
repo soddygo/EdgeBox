@@ -54,6 +54,14 @@ function start_display_and_desktop() {
 		export XDG_RUNTIME_DIR=/run/user/${USER_ID}
 		export GNOME_KEYRING_CONTROL=/run/user/${USER_ID}/keyring
 		export GTK_MODULES=gnome-keyring-pkcs11
+		
+		# 设置输入法环境变量
+		export GTK_IM_MODULE=fcitx5
+		export QT_IM_MODULE=fcitx5
+		export XMODIFIERS=@im=fcitx5
+		export INPUT_METHOD=fcitx5
+		export SDL_IM_MODULE=fcitx5
+		export GLFW_IM_MODULE=ibus
 
 		# 启动 gnome-keyring-daemon
 		gnome-keyring-daemon --start --components=secrets,ssh,pkcs11 >/dev/null 2>&1 &
@@ -63,6 +71,21 @@ function start_display_and_desktop() {
 
 		# 等待守护进程启动
 		sleep 2
+		
+		# 启动 fcitx5 输入法框架（在桌面环境启动前）
+		echo 'Starting fcitx5 input method...'
+		# 清理可能存在的 fcitx5 进程
+		pkill -9 fcitx5 || true
+		sleep 0.5
+		# 启动 fcitx5（使用 verbose 模式便于调试）
+		fcitx5 -d --replace --verbose default=10 >/var/log/fcitx5.log 2>&1 &
+		sleep 2
+		# 验证 fcitx5 是否启动成功
+		if pgrep -x fcitx5 > /dev/null; then
+			echo 'fcitx5 started successfully'
+		else
+			echo 'fcitx5 failed to start, check /var/log/fcitx5.log'
+		fi
 
 		# 启动 XFCE4 会话
 		xfce4-session >/dev/null 2>&1
