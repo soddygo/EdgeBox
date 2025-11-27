@@ -3,10 +3,9 @@ import uuid
 from typing import Optional
 
 from api.models.context import Context
-from fastapi.responses import PlainTextResponse
-
 from consts import JUPYTER_BASE_URL
 from errors import ExecutionError
+from fastapi.responses import PlainTextResponse
 from messaging import ContextWebSocket
 
 logger = logging.Logger(__name__)
@@ -14,7 +13,10 @@ logger = logging.Logger(__name__)
 
 def get_kernel_for_language(language: str) -> str:
     if language == "typescript":
-        return "javascript"
+        return "deno"
+
+    if language == "javascript":
+        return "deno"
 
     return language
 

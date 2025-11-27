@@ -240,11 +240,11 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get update && \
     apt-get autoclean && \
     rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
-# 安装 Node.js 22.x (optimized single layer)
+# 安装 Node.js 20.x (兼容 ijavascript)
 RUN apt-get update && \
     apt-get install -y curl gnupg ca-certificates && \
-    # 添加 NodeSource PPA for Node.js 22.x
-    curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && \
+    # 添加 NodeSource PPA for Node.js 20.x
+    curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
     # 安装 Node.js (npm 会一同被安装)
     apt-get install -y nodejs && \
     # 更新证书
@@ -291,15 +291,8 @@ RUN pip install --break-system-packages --upgrade pip && \
     # Clean up pip cache
     rm -rf /root/.cache
 
-# Javascript Kernel (with cleanup and use system libzmq)
-RUN export ZMQ_BUILD_DIR=/usr && \
-    export ZMQ_SHARED=1 && \
-    export npm_config_zmq_shared=true && \
-    npm install -g node-gyp && \
-    npm install -g --unsafe-perm ijavascript && \
-    ijsinstall --install=global && \
-    # Clean up npm cache
-    npm cache clean --force
+# JavaScript/TypeScript 使用 Deno kernel (不需要安装 ijavascript)
+# Deno kernel 在上面已经安装并配置完成
 
 # Deno Kernel (upgraded to latest 2.5.6)
 COPY --from=denoland/deno:bin-2.5.6 /deno /usr/bin/deno
