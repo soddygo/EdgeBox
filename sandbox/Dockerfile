@@ -240,11 +240,11 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get update && \
     apt-get autoclean && \
     rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
-# 安装 Node.js 20.x (兼容 ijavascript)
+# 安装 Node.js 22.x (现在支持，因为不再依赖 ijavascript)
 RUN apt-get update && \
     apt-get install -y curl gnupg ca-certificates && \
-    # 添加 NodeSource PPA for Node.js 20.x
-    curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
+    # 添加 NodeSource PPA for Node.js 22.x
+    curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && \
     # 安装 Node.js (npm 会一同被安装)
     apt-get install -y nodejs && \
     # 更新证书
