@@ -107,14 +107,15 @@ RUN apt-get update && \
     echo "user ALL=(ALL:ALL) NOPASSWD: ALL" >>/etc/sudoers && \
     # Create Chromium configuration directories
     mkdir -p /home/user/.config/chromium/Default/ && \
-    echo '{  "browser": { "custom_chrome_frame": true, "has_seen_welcome_page": true }, "profile": { "default_content_setting_values": { "geolocation": 1 }, "exit_type": "Normal", "exited_cleanly": true, "password_manager_enabled": false } }' > /home/user/.config/chromium/Default/Preferences && \
+    echo '{  "browser": { "custom_chrome_frame": true, "has_seen_welcome_page": true }, "profile": { "default_content_setting_values": { "geolocation": 1 }, "exit_type": "Normal", "exited_cleanly": true, "password_manager_enabled": false }, "credentials_enable_service": false, "credentials_enable_autosignin": false }' > /home/user/.config/chromium/Default/Preferences && \
     # Configure GNOME keyring with empty password (禁用密码提示)
     mkdir -p /home/user/.local/share/keyrings && \
-    # 创建默认 keyring 文件（空密码）
-    printf '[keyring]\ndisplay-name=Default keyring\nctime=0\nmtime=0\nlock-on-idle=false\nlock-after=false\n' > /home/user/.local/share/keyrings/Default_keyring.keyring && \
-    printf '[keyring]\ndisplay-name=login\nctime=0\nmtime=0\nlock-on-idle=false\nlock-after=false\n' > /home/user/.local/share/keyrings/login.keyring && \
-    # 设置默认 keyring
+    # 创建 Default keyring（无密码，禁用锁定）
+    printf '[keyring]\ndisplay-name=Default keyring\nctime=1732780800\nmtime=1732780800\nlock-on-idle=false\nlock-after=false\n' > /home/user/.local/share/keyrings/Default_keyring.keyring && \
+    # 设置为默认 keyring
     echo 'Default_keyring' > /home/user/.local/share/keyrings/default && \
+    chmod 600 /home/user/.local/share/keyrings/Default_keyring.keyring && \
+    chmod 600 /home/user/.local/share/keyrings/default && \
     # Configure PolicyKit to auto-allow Chromium operations
     mkdir -p /etc/polkit-1/localauthority/50-local.d && \
     # Create comprehensive policy for user
@@ -165,6 +166,8 @@ RUN apt-get update && \
     printf '[Addon]\n# Enabled\nEnabled=True\n\n[Behavior]\n# Show preedit within application\nPreeditInApplication=False\n\n[PinyinEngine]\n# Shuangpin Profile\nShuangpinProfile=Ziranma\n# Show current shuangpin mode\nShowActualPinyinInHint=False\n# Enable Prediction\nPredictionEnabled=True\n# Prediction Size\nPredictionSize=10\n# Enable Cloud Pinyin (默认禁用，避免首次提示)\nCloudPinyinEnabled=False\n# Cloud Pinyin Index\nCloudPinyinIndex=2' > /home/user/.config/fcitx5/conf/pinyin.conf && \
     # 7.1 配置云拼音选项（禁用首次提示）
     printf '[Addon]\n# Enabled\nEnabled=False\n\n[Behavior]\n# Show notification when toggled\nShowNotification=False' > /home/user/.config/fcitx5/conf/cloudpinyin.conf && \
+    # 7.2 禁用 fcitx5 所有通知
+    printf '[Addon]\nEnabled=False\n\n[Behavior]\nHiddenNotifications=' > /home/user/.config/fcitx5/conf/notifications.conf && \
     # 8. 创建输入法启用列表（关键：确保拼音输入法被启用）
     mkdir -p /home/user/.local/share/fcitx5/inputmethod && \
     printf 'keyboard-us:True\npinyin:True' > /home/user/.local/share/fcitx5/inputmethod/default.conf && \
@@ -184,7 +187,7 @@ RUN apt-get update && \
     chmod 777 /home/user && \
     chmod 700 /run/user/$(id -u user) && \
     # Create Chromium wrapper script with fcitx5 support
-    printf '#!/bin/bash\n# 加载 D-Bus 地址\nif [ -f /tmp/dbus-session-env ]; then\n    source /tmp/dbus-session-env\nfi\n\n# 设置输入法环境变量\nexport DISPLAY=:0\nexport GTK_IM_MODULE=fcitx5\nexport QT_IM_MODULE=fcitx5\nexport XMODIFIERS=@im=fcitx5\nexport INPUT_METHOD=fcitx5\n\n# 启动 Chromium\nexec /usr/bin/chromium \\\n  --user-data-dir=/home/user/chromium-data \\\n  --no-sandbox \\\n  --disable-dev-shm-usage \\\n  --remote-debugging-port=9222 \\\n  --remote-debugging-address=0.0.0.0 \\\n  --no-first-run \\\n  --no-default-browser-check "$@"\n' > /usr/bin/chromium-browser-launcher && \
+    printf '#!/bin/bash\n# 加载 D-Bus 地址\nif [ -f /tmp/dbus-session-env ]; then\n    source /tmp/dbus-session-env\nfi\n\n# 设置输入法环境变量\nexport DISPLAY=:0\nexport GTK_IM_MODULE=fcitx5\nexport QT_IM_MODULE=fcitx5\nexport XMODIFIERS=@im=fcitx5\nexport INPUT_METHOD=fcitx5\n\n# 启动 Chromium（禁用密码管理）\nexec /usr/bin/chromium \\\n  --user-data-dir=/home/user/chromium-data \\\n  --no-sandbox \\\n  --disable-dev-shm-usage \\\n  --remote-debugging-port=9222 \\\n  --remote-debugging-address=0.0.0.0 \\\n  --no-first-run \\\n  --no-default-browser-check \\\n  --password-store=basic \\\n  --use-mock-keychain "$@"\n' > /usr/bin/chromium-browser-launcher && \
     chmod 755 /usr/bin/chromium-browser-launcher && \
     # Add Chromium aliases
     echo 'alias chromium="/usr/local/bin/chromium"' >> /home/user/.bashrc && \
@@ -199,7 +202,7 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
 # Create Chromium launcher with fcitx5 support
-RUN printf '#!/bin/bash\n# 加载 D-Bus 地址\nif [ -f /tmp/dbus-session-env ]; then\n    source /tmp/dbus-session-env\nfi\n\n# 设置输入法环境变量\nexport DISPLAY=:0\nexport GTK_IM_MODULE=fcitx5\nexport QT_IM_MODULE=fcitx5\nexport XMODIFIERS=@im=fcitx5\nexport INPUT_METHOD=fcitx5\n\n# 以 user 用户身份运行 Chromium\nsu - user -c "export DISPLAY=:0; export DBUS_SESSION_BUS_ADDRESS=\\\"$DBUS_SESSION_BUS_ADDRESS\\\"; export GTK_IM_MODULE=fcitx5; export QT_IM_MODULE=fcitx5; export XMODIFIERS=@im=fcitx5; export INPUT_METHOD=fcitx5; /usr/bin/chromium --user-data-dir=/home/user/chromium-data --no-sandbox --disable-dev-shm-usage --remote-debugging-port=9222 --remote-debugging-address=0.0.0.0 --no-first-run --no-default-browser-check"\n' > /usr/local/bin/chromium && \
+RUN printf '#!/bin/bash\n# 加载 D-Bus 地址\nif [ -f /tmp/dbus-session-env ]; then\n    source /tmp/dbus-session-env\nfi\n\n# 设置输入法环境变量\nexport DISPLAY=:0\nexport GTK_IM_MODULE=fcitx5\nexport QT_IM_MODULE=fcitx5\nexport XMODIFIERS=@im=fcitx5\nexport INPUT_METHOD=fcitx5\n\n# 以 user 用户身份运行 Chromium（禁用密码管理）\nsu - user -c "export DISPLAY=:0; export DBUS_SESSION_BUS_ADDRESS=\\\"$DBUS_SESSION_BUS_ADDRESS\\\"; export GTK_IM_MODULE=fcitx5; export QT_IM_MODULE=fcitx5; export XMODIFIERS=@im=fcitx5; export INPUT_METHOD=fcitx5; /usr/bin/chromium --user-data-dir=/home/user/chromium-data --no-sandbox --disable-dev-shm-usage --remote-debugging-port=9222 --remote-debugging-address=0.0.0.0 --no-first-run --no-default-browser-check --password-store=basic --use-mock-keychain"\n' > /usr/local/bin/chromium && \
     chmod +x /usr/local/bin/chromium
 
 # Create a socat service with supervisor to ensure port forwarding is always running
