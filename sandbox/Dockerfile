@@ -21,8 +21,8 @@ RUN apt-get update && \
     xserver-xorg xorg x11-xserver-utils xvfb x11-utils xauth \
     # XFCE desktop environment:
     xfce4 xfce4-goodies \
-    # 中文输入法
-    fcitx5 fcitx5-pinyin \
+    # 中文输入法（fcitx5 完整安装）
+    fcitx5 fcitx5-pinyin fcitx5-frontend-gtk3 fcitx5-frontend-gtk2 fcitx5-frontend-qt5 fcitx5-module-xorg fcitx5-config-qt im-config dbus-x11 \
     # Basic system utilities:
     util-linux sudo curl git \
     # Python pip:
@@ -108,9 +108,13 @@ RUN apt-get update && \
     # Create Chromium configuration directories
     mkdir -p /home/user/.config/chromium/Default/ && \
     echo '{  "browser": { "custom_chrome_frame": true, "has_seen_welcome_page": true }, "profile": { "default_content_setting_values": { "geolocation": 1 }, "exit_type": "Normal", "exited_cleanly": true, "password_manager_enabled": false } }' > /home/user/.config/chromium/Default/Preferences && \
-    # Configure GNOME keyring and autostart
+    # Configure GNOME keyring with empty password (禁用密码提示)
     mkdir -p /home/user/.local/share/keyrings && \
-    touch /home/user/.local/share/keyrings/login.keyring && \
+    # 创建默认 keyring 文件（空密码）
+    printf '[keyring]\ndisplay-name=Default keyring\nctime=0\nmtime=0\nlock-on-idle=false\nlock-after=false\n' > /home/user/.local/share/keyrings/Default_keyring.keyring && \
+    printf '[keyring]\ndisplay-name=login\nctime=0\nmtime=0\nlock-on-idle=false\nlock-after=false\n' > /home/user/.local/share/keyrings/login.keyring && \
+    # 设置默认 keyring
+    echo 'Default_keyring' > /home/user/.local/share/keyrings/default && \
     # Configure PolicyKit to auto-allow Chromium operations
     mkdir -p /etc/polkit-1/localauthority/50-local.d && \
     # Create comprehensive policy for user
@@ -130,29 +134,29 @@ RUN apt-get update && \
     mkdir -p /home/user/.config/fcitx5 && \
     mkdir -p /home/user/.config/autostart && \
     mkdir -p /home/user/.config/environment.d && \
-    # 1. 在 .bashrc 中设置环境变量（终端使用）
+    # 1. 在 .bashrc 中设置环境变量（终端使用 - 纯 fcitx5）
     echo 'export GTK_IM_MODULE=fcitx5' >> /home/user/.bashrc && \
     echo 'export QT_IM_MODULE=fcitx5' >> /home/user/.bashrc && \
     echo 'export XMODIFIERS=@im=fcitx5' >> /home/user/.bashrc && \
     echo 'export INPUT_METHOD=fcitx5' >> /home/user/.bashrc && \
     echo 'export SDL_IM_MODULE=fcitx5' >> /home/user/.bashrc && \
-    echo 'export GLFW_IM_MODULE=ibus' >> /home/user/.bashrc && \
+    echo 'export GLFW_IM_MODULE=fcitx5' >> /home/user/.bashrc && \
     # 2. 在 .xprofile 中设置环境变量（X 会话启动时加载，GUI 应用可用）
     echo 'export GTK_IM_MODULE=fcitx5' > /home/user/.xprofile && \
     echo 'export QT_IM_MODULE=fcitx5' >> /home/user/.xprofile && \
     echo 'export XMODIFIERS=@im=fcitx5' >> /home/user/.xprofile && \
     echo 'export INPUT_METHOD=fcitx5' >> /home/user/.xprofile && \
     echo 'export SDL_IM_MODULE=fcitx5' >> /home/user/.xprofile && \
-    echo 'export GLFW_IM_MODULE=ibus' >> /home/user/.xprofile && \
+    echo 'export GLFW_IM_MODULE=fcitx5' >> /home/user/.xprofile && \
     # 3. 在 systemd 用户环境中设置（现代 Linux 推荐方式）
     echo 'GTK_IM_MODULE=fcitx5' > /home/user/.config/environment.d/fcitx5.conf && \
     echo 'QT_IM_MODULE=fcitx5' >> /home/user/.config/environment.d/fcitx5.conf && \
     echo 'XMODIFIERS=@im=fcitx5' >> /home/user/.config/environment.d/fcitx5.conf && \
     echo 'INPUT_METHOD=fcitx5' >> /home/user/.config/environment.d/fcitx5.conf && \
     echo 'SDL_IM_MODULE=fcitx5' >> /home/user/.config/environment.d/fcitx5.conf && \
-    echo 'GLFW_IM_MODULE=ibus' >> /home/user/.config/environment.d/fcitx5.conf && \
-    # 4. 创建自启动配置 - 让 fcitx5 开机启动
-    printf '[Desktop Entry]\nType=Application\nName=Fcitx 5\nComment=Input Method Framework\nExec=fcitx5 -d --replace\nIcon=fcitx5\nStartupNotify=false\nTerminal=false\nCategories=System;Utility;\nX-GNOME-Autostart-enabled=true\nX-KDE-autostart-after=panel\nX-MATE-Autostart-enabled=true' > /home/user/.config/autostart/fcitx5.desktop && \
+    echo 'GLFW_IM_MODULE=fcitx5' >> /home/user/.config/environment.d/fcitx5.conf && \
+    # 4. 创建自启动配置 - 让 fcitx5 在 XFCE 启动后自动启动
+    printf '[Desktop Entry]\nType=Application\nName=Fcitx 5\nComment=Input Method Framework\nExec=fcitx5 -d --replace\nIcon=fcitx5\nStartupNotify=false\nTerminal=false\nCategories=System;Utility;\nX-GNOME-Autostart-enabled=true\nX-XFCE-Autostart-enabled=true' > /home/user/.config/autostart/fcitx5.desktop && \
     # 6. 配置 fcitx5 全局选项（启用云拼音、设置切换快捷键）
     mkdir -p /home/user/.config/fcitx5/conf && \
     printf '[Hotkey]\n# Enumerate when press trigger key repeatedly\nEnumerateWithTriggerKeys=True\n# Temporally switch between first and current Input Method\nAltTriggerKeys=\n# Enumerate Input Method Forward\nEnumerateForwardKeys=\n# Enumerate Input Method Backward\nEnumerateBackwardKeys=\n# Skip first input method while enumerating\nEnumerateSkipFirst=False\n\n[Hotkey/TriggerKeys]\n0=Control+space\n1=Shift+Control+space\n\n[Hotkey/EnumerateGroupForwardKeys]\n0=Super+space\n\n[Hotkey/EnumerateGroupBackwardKeys]\n0=Shift+Super+space\n\n[Hotkey/ActivateKeys]\n0=Hangul_Hanja\n\n[Hotkey/DeactivateKeys]\n0=Hangul_Romaja\n\n[Hotkey/PrevPage]\n0=Up\n\n[Hotkey/NextPage]\n0=Down\n\n[Hotkey/PrevCandidate]\n0=Shift+Tab\n\n[Hotkey/NextCandidate]\n0=Tab\n\n[Hotkey/TogglePreedit]\n0=Control+Alt+P\n\n[Behavior]\n# Active By Default\nActiveByDefault=True\n# Share Input State\nShareInputState=No\n# Preload input method to be used by default\nPreloadInputMethod=True\n# Show Input Method Information when switch input method\nShowInputMethodInformation=True\n# Show Input Method Information when changing focus\nShowInputMethodInformationWhenFocusIn=False\n# Show compact input method information\nCompactInputMethodInformation=True\n# Show first input method information\nShowFirstInputMethodInformation=True\n# Default page size\nDefaultPageSize=5\n# Override Xkb Option\nOverrideXkbOption=False\n# Custom Xkb Option\nCustomXkbOption=\n# Force Enabled Addons\nEnabledAddons=\n# Force Disabled Addons\nDisabledAddons=\n# Preload input method to be used by default\nPreeditEnabledByDefault=True' > /home/user/.config/fcitx5/config && \
@@ -169,12 +173,18 @@ RUN apt-get update && \
     printf '[Addons]\n0=fcitx5-pinyin\n1=fcitx5-chinese-addons' > /home/user/.config/fcitx5/addon.conf && \
     # 10. 创建简化的 profile（使用更兼容的格式）
     printf '[Groups/0]\nName=Default\nDefault Layout=us\nDefaultIM=pinyin\n\n[Groups/0/Items/0]\nName=keyboard-us\nLayout=\n\n[Groups/0/Items/1]\nName=pinyin\nLayout=\n\n[GroupOrder]\n0=Default\n\n[Behavior]\nActiveByDefault=True\nShareInputState=No' > /home/user/.config/fcitx5/profile && \
+    # 11. 配置 im-config（系统级输入法框架选择）
+    mkdir -p /home/user/.config && \
+    echo 'fcitx5' > /home/user/.config/im-config && \
+    # 12. 创建 GTK 3.0 im-module 配置（使用 fcitx5）
+    mkdir -p /home/user/.config/gtk-3.0 && \
+    printf '[Settings]\ngtk-im-module=fcitx5' > /home/user/.config/gtk-3.0/settings.ini && \
     chown -R user:user /home/user /run/user/$(id -u user) && \
     chmod -R 777 /home/user/chromium-data && \
     chmod 777 /home/user && \
     chmod 700 /run/user/$(id -u user) && \
-    # Create secure wrapper script in /usr/bin (更安全的路径，支持中文输入法)
-    printf '#!/bin/bash\nUSER_ID=$(id -u user)\nexport DISPLAY=:0\nmkdir -p /run/user/${USER_ID}\nchown user:user /run/user/${USER_ID}\nchmod 700 /run/user/${USER_ID}\nexport XDG_RUNTIME_DIR=/run/user/${USER_ID}\nexport GNOME_KEYRING_CONTROL=/run/user/${USER_ID}/keyring\nexport DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/${USER_ID}/bus\nexport XDG_SESSION_TYPE=x11\nexport GTK_MODULES=gnome-keyring-pkcs11:libgnome-keyring\n# 关键：设置输入法环境变量\nexport GTK_IM_MODULE=fcitx5\nexport QT_IM_MODULE=fcitx5\nexport XMODIFIERS=@im=fcitx5\nexport INPUT_METHOD=fcitx5\nexec /usr/bin/chromium --user-data-dir=/home/user/chromium-data --no-sandbox --disable-gpu --disable-dev-shm-usage --remote-debugging-port=9222 --remote-debugging-address=0.0.0.0 --no-first-run --no-default-browser-check --disable-extensions --disable-default-apps --disable-component-update --password-store=basic --use-mock-keychain --autoplay-policy=no-user-gesture-required --no-zygote --disable-session-crashed-bubble --disable-features=VizDisplayCompositor --disable-policy-service-test-mode --disable-gpu-sandbox --disable-setuid-sandbox --disable-background-networking --disable-background-timer-throttling --disable-renderer-backgrounding --disable-backgrounding-occluded-windows --disable-features=TranslateUI --disable-ipc-flooding-protection --enable-features=UseOzonePlatform --ozone-platform=x11 "$@"\n' > /usr/bin/chromium-browser-launcher && \
+    # Create Chromium wrapper script with fcitx5 support
+    printf '#!/bin/bash\n# 加载 D-Bus 地址\nif [ -f /tmp/dbus-session-env ]; then\n    source /tmp/dbus-session-env\nfi\n\n# 设置输入法环境变量\nexport DISPLAY=:0\nexport GTK_IM_MODULE=fcitx5\nexport QT_IM_MODULE=fcitx5\nexport XMODIFIERS=@im=fcitx5\nexport INPUT_METHOD=fcitx5\n\n# 启动 Chromium\nexec /usr/bin/chromium \\\n  --user-data-dir=/home/user/chromium-data \\\n  --no-sandbox \\\n  --disable-dev-shm-usage \\\n  --remote-debugging-port=9222 \\\n  --remote-debugging-address=0.0.0.0 \\\n  --no-first-run \\\n  --no-default-browser-check "$@"\n' > /usr/bin/chromium-browser-launcher && \
     chmod 755 /usr/bin/chromium-browser-launcher && \
     # Add Chromium aliases
     echo 'alias chromium="/usr/local/bin/chromium"' >> /home/user/.bashrc && \
@@ -188,8 +198,8 @@ RUN apt-get update && \
     apt-get autoclean && \
     rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
-# Create Chromium launcher with CDP flags (支持中文输入法)
-RUN printf '#!/bin/bash\nUSER_ID=$(id -u user)\nexport DISPLAY=:0\n\n# 创建并设置运行时目录\nmkdir -p /run/user/${USER_ID}\nchown user:user /run/user/${USER_ID}\nchmod 700 /run/user/${USER_ID}\n\n# 设置关键环境变量\nexport XDG_RUNTIME_DIR=/run/user/${USER_ID}\nexport GNOME_KEYRING_CONTROL=/run/user/${USER_ID}/keyring\nexport DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/${USER_ID}/bus\nexport XDG_SESSION_TYPE=x11\nexport GTK_MODULES=gnome-keyring-pkcs11:libgnome-keyring\nexport GIO_USE_VFS=local\nexport GIO_USE_GNOME_VFS_MODULE=shared\n\n# 关键：设置输入法环境变量\nexport GTK_IM_MODULE=fcitx5\nexport QT_IM_MODULE=fcitx5\nexport XMODIFIERS=@im=fcitx5\nexport INPUT_METHOD=fcitx5\n\necho "Starting Chromium as user..."\n\n# 以 user 用户身份运行 Chromium（添加输入法支持参数）\nsu - user -c "export DISPLAY=:0; export XDG_RUNTIME_DIR=/run/user/${USER_ID}; export GNOME_KEYRING_CONTROL=/run/user/${USER_ID}/keyring; export DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/${USER_ID}/bus; export XDG_SESSION_TYPE=x11; export GTK_MODULES=gnome-keyring-pkcs11:libgnome-keyring; export GTK_IM_MODULE=fcitx5; export QT_IM_MODULE=fcitx5; export XMODIFIERS=@im=fcitx5; export INPUT_METHOD=fcitx5; /usr/bin/chromium --user-data-dir=/home/user/chromium-data --no-sandbox --disable-gpu --disable-dev-shm-usage --remote-debugging-port=9222 --remote-debugging-address=0.0.0.0 --no-first-run --no-default-browser-check --disable-extensions --disable-default-apps --disable-component-update --password-store=basic --use-mock-keychain --autoplay-policy=no-user-gesture-required --no-zygote --disable-session-crashed-bubble --disable-features=VizDisplayCompositor --disable-policy-service-test-mode --disable-gpu-sandbox --disable-setuid-sandbox --ignore-gpu-blocklist --disable-gpu-driver-bug-workarounds --disable-background-networking --disable-background-timer-throttling --disable-renderer-backgrounding --disable-backgrounding-occluded-windows --disable-features=TranslateUI --disable-ipc-flooding-protection --disable-features=OptimizationHints --disable-client-side-phishing-detection --disable-popup-blocking --disable-prompt-on-repost --disable-sync --disable-translate --disable-field-trial-config --disable-blink-features=AutomationControlled --no-experiments --metrics-recording-only --no-report-upload --force-device-scale-factor=1 --disable-touch-editing --disable-new-menu-bar --disable-extensions-http-throttling --disable-ipc-flooding-protection --disable-plugins-discovery --disable-webgl --enable-logging --log-level=0 --enable-features=UseOzonePlatform --ozone-platform=x11"\n' > /usr/local/bin/chromium && \
+# Create Chromium launcher with fcitx5 support
+RUN printf '#!/bin/bash\n# 加载 D-Bus 地址\nif [ -f /tmp/dbus-session-env ]; then\n    source /tmp/dbus-session-env\nfi\n\n# 设置输入法环境变量\nexport DISPLAY=:0\nexport GTK_IM_MODULE=fcitx5\nexport QT_IM_MODULE=fcitx5\nexport XMODIFIERS=@im=fcitx5\nexport INPUT_METHOD=fcitx5\n\n# 以 user 用户身份运行 Chromium\nsu - user -c "export DISPLAY=:0; export DBUS_SESSION_BUS_ADDRESS=\\\"$DBUS_SESSION_BUS_ADDRESS\\\"; export GTK_IM_MODULE=fcitx5; export QT_IM_MODULE=fcitx5; export XMODIFIERS=@im=fcitx5; export INPUT_METHOD=fcitx5; /usr/bin/chromium --user-data-dir=/home/user/chromium-data --no-sandbox --disable-dev-shm-usage --remote-debugging-port=9222 --remote-debugging-address=0.0.0.0 --no-first-run --no-default-browser-check"\n' > /usr/local/bin/chromium && \
     chmod +x /usr/local/bin/chromium
 
 # Create a socat service with supervisor to ensure port forwarding is always running
@@ -237,15 +247,14 @@ RUN mkdir -p /home/user/.config/xfce4/xfconf/xfce-perchannel-xml/ && \
     echo '<?xml version="1.0" encoding="UTF-8"?>\n<channel name="xfce4-power-manager" version="1.0">\n  <property name="xfce4-power-manager" type="empty">\n    <property name="blank-on-ac" type="int" value="0"/>\n    <property name="blank-on-battery" type="int" value="0"/>\n    <property name="dpms-enabled" type="bool" value="false"/>\n    <property name="dpms-on-ac-sleep" type="uint" value="0"/>\n    <property name="dpms-on-ac-off" type="uint" value="0"/>\n    <property name="dpms-on-battery-sleep" type="uint" value="0"/>\n    <property name="dpms-on-battery-off" type="uint" value="0"/>\n  </property>\n</channel>' > /home/user/.config/xfce4/xfconf/xfce-perchannel-xml/xfce4-power-manager.xml && \
     # Configure XFCE panel with Chromium launcher in taskbar
     echo '<?xml version="1.0" encoding="UTF-8"?>\n<channel name="xfce4-panel" version="1.0">\n  <property name="configver" type="int" value="2"/>\n  <property name="panels" type="array">\n    <value type="int" value="1"/>\n    <property name="panel-1" type="empty">\n      <property name="position" type="string" value="p=6;x=0;y=0"/>\n      <property name="length" type="uint" value="100"/>\n      <property name="position-locked" type="bool" value="true"/>\n      <property name="size" type="uint" value="30"/>\n      <property name="plugin-ids" type="array">\n        <value type="int" value="1"/>\n        <value type="int" value="2"/>\n        <value type="int" value="3"/>\n        <value type="int" value="4"/>\n        <value type="int" value="5"/>\n        <value type="int" value="6"/>\n        <value type="int" value="7"/>\n      </property>\n    </property>\n  </property>\n  <property name="plugins" type="empty">\n    <property name="plugin-1" type="string" value="applicationsmenu"/>\n    <property name="plugin-2" type="string" value="separator"/>\n    <property name="plugin-3" type="string" value="tasklist"/>\n    <property name="plugin-4" type="string" value="launcher">\n      <property name="items" type="array">\n        <value type="string" value="chromium.desktop"/>\n      </property>\n    </property>\n    <property name="plugin-5" type="string" value="separator"/>\n    <property name="plugin-6" type="string" value="systray"/>\n    <property name="plugin-7" type="string" value="clock"/>\n  </property>\n</channel>' > /home/user/.config/xfce4/xfconf/xfce-perchannel-xml/xfce4-panel.xml && \
-    # Create system-wide Chromium desktop entry in secure location (支持输入法)
+    # Create system-wide Chromium desktop entry (支持 fcitx5 输入法)
     mkdir -p /usr/share/applications && \
-    printf "[Desktop Entry]\nVersion=1.0\nType=Application\nName=Chromium\nComment=Web Browser with Remote Debugging\nExec=env GTK_IM_MODULE=fcitx5 QT_IM_MODULE=fcitx5 XMODIFIERS=@im=fcitx5 /usr/bin/chromium-browser-launcher\nIcon=chromium\nTerminal=false\nCategories=Network;WebBrowser;\nMimeType=text/html;text/xml;application/xhtml+xml;application/xml;application/rss+xml;application/rdf+xml;image/gif;image/jpeg;image/png;x-scheme-handler/http;x-scheme-handler/https;x-scheme-handler/ftp;x-scheme-handler/chrome;video/webm;application/x-xpinstall;\nActions=NewWindow;NewPrivateWindow;" > /usr/share/applications/chromium-browser.desktop && \
-    # Also create symbolic link for chromium.desktop
+    printf "[Desktop Entry]\nVersion=1.0\nType=Application\nName=Chromium\nComment=Web Browser\nExec=/usr/bin/chromium-browser-launcher\nIcon=chromium\nTerminal=false\nCategories=Network;WebBrowser;" > /usr/share/applications/chromium-browser.desktop && \
     ln -sf /usr/share/applications/chromium-browser.desktop /usr/share/applications/chromium.desktop && \
     chmod 644 /usr/share/applications/chromium-browser.desktop /usr/share/applications/chromium.desktop && \
-    # Override user-level as well (支持输入法)
+    # Override user-level as well
     mkdir -p /home/user/.local/share/applications && \
-    printf "[Desktop Entry]\nVersion=1.0\nType=Application\nName=Chromium\nComment=Web Browser with Remote Debugging\nExec=env GTK_IM_MODULE=fcitx5 QT_IM_MODULE=fcitx5 XMODIFIERS=@im=fcitx5 /usr/bin/chromium-browser-launcher\nIcon=chromium\nTerminal=false\nCategories=Network;WebBrowser;" > /home/user/.local/share/applications/chromium.desktop && \
+    printf "[Desktop Entry]\nVersion=1.0\nType=Application\nName=Chromium\nComment=Web Browser\nExec=/usr/bin/chromium-browser-launcher\nIcon=chromium\nTerminal=false\nCategories=Network;WebBrowser;" > /home/user/.local/share/applications/chromium.desktop && \
     chmod 644 /home/user/.local/share/applications/chromium.desktop && \
     # Set Chromium as default web browser
     echo "[Default Applications]\ntext/html=chromium.desktop\ntext/xml=chromium.desktop\napplication/xhtml+xml=chromium.desktop\napplication/xml=chromium.desktop\napplication/rss+xml=chromium.desktop\napplication/rdf+xml=chromium.desktop\nimage/gif=chromium.desktop\nimage/jpeg=chromium.desktop\nimage/png=chromium.desktop\nx-scheme-handler/http=chromium.desktop\nx-scheme-handler/https=chromium.desktop\nx-scheme-handler/ftp=chromium.desktop\nx-scheme-handler/chrome=chromium.desktop\nvideo/webm=chromium.desktop\napplication/x-xpinstall=chromium.desktop" > /home/user/.config/mimeapps.list && \
@@ -429,6 +438,11 @@ COPY ./start-up.sh $JUPYTER_CONFIG_PATH/
 RUN chmod +x $JUPYTER_CONFIG_PATH/start-up.sh
 COPY ./jupyter_server_config.py $JUPYTER_CONFIG_PATH/
 
+# 复制中文输入法修复脚本（容器内运行 fix-ime 命令）
+COPY ./fix-chrome-ime-final.sh /usr/local/bin/fix-ime
+RUN chmod +x /usr/local/bin/fix-ime
+
+
 RUN mkdir -p $IPYTHON_CONFIG_PATH/profile_default
 COPY ipython_kernel_config.py $IPYTHON_CONFIG_PATH/profile_default/
 RUN mkdir -p $IPYTHON_CONFIG_PATH/profile_default/startup
@@ -436,24 +450,21 @@ COPY startup_scripts/* $IPYTHON_CONFIG_PATH/profile_default/startup
 
 ENV DISPLAY=:0
 
-# 设置全局输入法环境变量（容器级别）
+# 设置全局输入法环境变量（容器级别 - 纯 fcitx5）
 ENV GTK_IM_MODULE=fcitx5 \
     QT_IM_MODULE=fcitx5 \
     XMODIFIERS=@im=fcitx5 \
     INPUT_METHOD=fcitx5 \
     SDL_IM_MODULE=fcitx5 \
-    GLFW_IM_MODULE=ibus
+    GLFW_IM_MODULE=fcitx5
 
-RUN apt-get update && apt-get install -y dbus-x11 && \
-    # Ensure PolicyKit and D-Bus are running
-    # Create D-Bus session configuration
-    mkdir -p /etc/dbus-1/session.d && \
+# 配置 D-Bus 和 PolicyKit（已在前面安装 dbus-x11）
+RUN mkdir -p /etc/dbus-1/session.d && \
     printf '<!-- Session bus for user -->\n<!DOCTYPE busconfig PUBLIC "-//freedesktop//DTD D-Bus Bus Configuration 1.0//EN" "http://www.freedesktop.org/standards/dbus/1.0/busconfig.dtd">\n<busconfig>\n  <policy user="user">\n    <allow own="*"/>\n    <allow own_prefix="*"/>\n    <allow send_destination="*"/>\n    <allow receive_sender="*"/>\n  </policy>\n</busconfig>' > /etc/dbus-1/session.d/user-session.conf && \
     # Set proper permissions
     chown -R root:root /etc/polkit-1 /etc/dbus-1 && \
     chmod 755 /etc/polkit-1/localauthority/50-local.d /etc/dbus-1/session.d && \
-    chmod 644 /etc/polkit-1/localauthority/50-local.d/*.pkla /etc/dbus-1/session.d/*.conf && \
-    rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+    chmod 644 /etc/polkit-1/localauthority/50-local.d/*.pkla /etc/dbus-1/session.d/*.conf
 
 
 

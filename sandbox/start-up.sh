@@ -16,10 +16,16 @@ function start_display_and_desktop() {
 	chmod 700 /run/user/${USER_ID}
 	chown user:user /run/user/${USER_ID}
 
-	# 启动 D-Bus 会话 (以 user 用户启动)
+	# 启动 D-Bus 会话 (以 user 用户启动，并保存地址)
 	echo "Starting D-Bus session as user..."
-	su - user -c "eval \$(dbus-launch --sh-syntax); export DBUS_SESSION_BUS_ADDRESS; echo \"D-Bus session: \$DBUS_SESSION_BUS_ADDRESS\"" &
+	su - user -c "dbus-launch --sh-syntax > /tmp/dbus-session-env"
 	sleep 2
+	
+	# 导出 D-Bus 会话地址供后续使用
+	if [ -f /tmp/dbus-session-env ]; then
+		source /tmp/dbus-session-env
+		echo "D-Bus session: $DBUS_SESSION_BUS_ADDRESS"
+	fi
 
 	# 启动 D-Bus 系统总线
 	echo "Starting D-Bus system bus..."
@@ -46,6 +52,12 @@ function start_display_and_desktop() {
 		fi
 	done
 
+	# 导入 D-Bus 会话地址
+	if [ -f /tmp/dbus-session-env ]; then
+		source /tmp/dbus-session-env
+		echo "D-Bus session loaded: $DBUS_SESSION_BUS_ADDRESS"
+	fi
+
 	# 以user用户启动XFCE4会话和所有必要的守护进程
 	su - user -c "
 		export DISPLAY=:0
@@ -55,13 +67,20 @@ function start_display_and_desktop() {
 		export GNOME_KEYRING_CONTROL=/run/user/${USER_ID}/keyring
 		export GTK_MODULES=gnome-keyring-pkcs11
 		
-		# 设置输入法环境变量
+		# 导入 D-Bus 会话地址
+		export DBUS_SESSION_BUS_ADDRESS='$DBUS_SESSION_BUS_ADDRESS'
+		
+		# 设置输入法环境变量（纯 fcitx5）
 		export GTK_IM_MODULE=fcitx5
 		export QT_IM_MODULE=fcitx5
 		export XMODIFIERS=@im=fcitx5
 		export INPUT_METHOD=fcitx5
 		export SDL_IM_MODULE=fcitx5
-		export GLFW_IM_MODULE=ibus
+		export GLFW_IM_MODULE=fcitx5
+		
+		echo \"Environment variables set:\"
+		echo \"  GTK_IM_MODULE=\$GTK_IM_MODULE\"
+		echo \"  DBUS_SESSION_BUS_ADDRESS=\$DBUS_SESSION_BUS_ADDRESS\"
 
 		# 启动 gnome-keyring-daemon
 		gnome-keyring-daemon --start --components=secrets,ssh,pkcs11 >/dev/null 2>&1 &
@@ -72,23 +91,21 @@ function start_display_and_desktop() {
 		# 等待守护进程启动
 		sleep 2
 		
-		# 启动 fcitx5 输入法框架（在桌面环境启动前）
-		echo 'Starting fcitx5 input method...'
-		# 清理可能存在的 fcitx5 进程
-		pkill -9 fcitx5 || true
-		sleep 0.5
-		# 启动 fcitx5（使用 verbose 模式便于调试）
-		fcitx5 -d --replace --verbose default=10 >/var/log/fcitx5.log 2>&1 &
-		sleep 2
-		# 验证 fcitx5 是否启动成功
-		if pgrep -x fcitx5 > /dev/null; then
-			echo 'fcitx5 started successfully'
-		else
-			echo 'fcitx5 failed to start, check /var/log/fcitx5.log'
-		fi
+		# 输入法框架（fcitx5）将由 XFCE 自启动项自动启动
+		echo 'Fcitx5 will be started by XFCE autostart'
 
-		# 启动 XFCE4 会话
-		xfce4-session >/dev/null 2>&1
+		# 使用 env 明确传递环境变量启动 XFCE4
+		exec env \
+			DISPLAY=:0 \
+			XDG_CURRENT_DESKTOP=XFCE \
+			XDG_SESSION_DESKTOP=xfce \
+			XDG_RUNTIME_DIR=/run/user/${USER_ID} \
+			DBUS_SESSION_BUS_ADDRESS=\"\$DBUS_SESSION_BUS_ADDRESS\" \
+			GTK_IM_MODULE=ibus \
+			QT_IM_MODULE=ibus \
+			XMODIFIERS=@im=ibus \
+			INPUT_METHOD=fcitx5 \
+			xfce4-session
 	" &
 
 	echo "X11 display and XFCE4 desktop started successfully"
