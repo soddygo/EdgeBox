@@ -1,0 +1,35 @@
+# VNC 自启动脚本
+RUN echo '#!/bin/bash
+# VNC 自动启动脚本
+echo "Starting VNC services..."
+
+# 等待X11完全启动
+sleep 10
+
+# 停止现有VNC服务
+pkill x11vnc || true
+sleep 2
+
+# 启动x11vnc服务器
+x11vnc -bg -display :0 -forever -wait 50 -shared -rfbport 5900 -nopw 2>/tmp/x11vnc_stderr.log &
+
+# 等待x11vnc启动
+sleep 3
+
+# 启动noVNC代理
+cd /opt/noVNC/utils
+nohup ./novnc_proxy --vnc localhost:5900 --listen 6080 --web /opt/noVNC > /tmp/novnc.log 2>&1 &
+
+echo "VNC services started"' > /usr/local/bin/start-vnc.sh && \
+    chmod +x /usr/local/bin/start-vnc.sh
+
+# 添加到用户自启动
+RUN echo "[Desktop Entry]
+Type=Application
+Name=VNC Server
+Exec=/usr/local/bin/start-vnc.sh
+Hidden=false
+NoDisplay=false
+X-GNOME-Autostart-enabled=true
+X-XFCE-Autostart-enabled=true" > /home/user/.config/autostart/vnc.desktop && \
+    chown -R user:user /home/user/.config/autostart/vnc.desktop
